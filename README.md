@@ -43,6 +43,16 @@ python shortcut_helper.py
 python -m unittest discover -s tests -v
 ```
 
+5. 打包生成独立 `.exe` 与安装向导程序（需预先安装 `pyinstaller`）：
+
+```bash
+python build_exe.py
+```
+
+构建完成后会在 `dist/` 目录下生成：
+- `dist/番茄钟.exe`（免安装绿色独立版）
+- `dist/番茄钟_Setup_v1.0.0.exe`（图形化独立安装程序，支持 `--silent` 静默安装）
+
 ## 项目结构
 
 ```text

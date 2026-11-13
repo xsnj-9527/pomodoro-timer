@@ -1,11 +1,11 @@
-"""Windows 桌面快捷方式生成工具模块。"""
+"""Windows 桌面与开始菜单快捷方式生成工具模块。"""
 
 import ctypes
 from pathlib import Path
 import subprocess
 import sys
 
-from config import APP_NAME, BASE_DIR
+from config import APP_NAME, BASE_DIR, ICON_ICO_PATH
 from icon_helper import ensure_app_icons
 
 SHORTCUT_FILENAME = "番茄钟.lnk"
@@ -39,22 +39,24 @@ def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def create_shortcut_file(shortcut_path: Path) -> Path:
-    """在指定路径创建指向本番茄钟应用的 Windows .lnk 快捷方式。"""
+def _run_ps_create_shortcut(
+    shortcut_path: Path,
+    target_path: Path,
+    arguments: str,
+    working_dir: Path,
+    icon_path: Path,
+) -> Path:
+    """调用 PowerShell WScript.Shell 创建 Windows .lnk 快捷方式。"""
     target_lnk = Path(shortcut_path)
     target_lnk.parent.mkdir(parents=True, exist_ok=True)
-
-    _, ico_path = ensure_app_icons()
-    python_exe = _get_pythonw_executable()
-    main_script = BASE_DIR / "main.py"
 
     ps_script = (
         "$ws = New-Object -ComObject WScript.Shell; "
         f"$sc = $ws.CreateShortcut({_ps_quote(str(target_lnk))}); "
-        f"$sc.TargetPath = {_ps_quote(str(python_exe))}; "
-        f"$sc.Arguments = {_ps_quote(chr(34) + str(main_script) + chr(34))}; "
-        f"$sc.WorkingDirectory = {_ps_quote(str(BASE_DIR))}; "
-        f"$sc.IconLocation = {_ps_quote(str(ico_path) + ',0')}; "
+        f"$sc.TargetPath = {_ps_quote(str(target_path))}; "
+        f"$sc.Arguments = {_ps_quote(arguments)}; "
+        f"$sc.WorkingDirectory = {_ps_quote(str(working_dir))}; "
+        f"$sc.IconLocation = {_ps_quote(str(icon_path) + ',0')}; "
         f"$sc.Description = {_ps_quote(APP_NAME)}; "
         "$sc.Save()"
     )
@@ -80,8 +82,55 @@ def create_shortcut_file(shortcut_path: Path) -> Path:
     return target_lnk
 
 
+def create_exe_shortcut(
+    exe_path: Path,
+    shortcut_path: Path,
+    icon_path: Path | None = None,
+) -> Path:
+    """创建直接指向独立 .exe 可执行文件的 .lnk 快捷方式。"""
+    resolved_exe = Path(exe_path).resolve()
+    resolved_icon = Path(icon_path).resolve() if icon_path else resolved_exe
+    return _run_ps_create_shortcut(
+        shortcut_path=shortcut_path,
+        target_path=resolved_exe,
+        arguments="",
+        working_dir=resolved_exe.parent,
+        icon_path=resolved_icon,
+    )
+
+
+def create_shortcut_file(shortcut_path: Path) -> Path:
+    """在指定路径创建指向本番茄钟应用的 Windows .lnk 快捷方式。"""
+    _, ico_path = ensure_app_icons()
+
+    if getattr(sys, "frozen", False):
+        return create_exe_shortcut(
+            exe_path=Path(sys.executable).resolve(),
+            shortcut_path=shortcut_path,
+            icon_path=ico_path if ico_path.exists() else None,
+        )
+
+    dist_exe = BASE_DIR / "dist" / "番茄钟.exe"
+    if dist_exe.exists():
+        return create_exe_shortcut(
+            exe_path=dist_exe,
+            shortcut_path=shortcut_path,
+            icon_path=ico_path if ico_path.exists() else None,
+        )
+
+    python_exe = _get_pythonw_executable()
+    main_script = BASE_DIR / "main.py"
+    return _run_ps_create_shortcut(
+        shortcut_path=shortcut_path,
+        target_path=python_exe,
+        arguments=f'"{main_script}"',
+        working_dir=BASE_DIR,
+        icon_path=ico_path if ICON_ICO_PATH.exists() else ico_path,
+    )
+
+
 def create_desktop_shortcut() -> tuple[bool, Path, str]:
-    """在项目目录及用户桌面生成应用快捷方式，返回 (桌面是否成功, 最终路径, 提示消息)。"""
+    """在应用目录及用户桌面生成应用快捷方式，返回 (桌面是否成功, 最终路径, 提示消息)。"""
     local_lnk = BASE_DIR / SHORTCUT_FILENAME
     create_shortcut_file(local_lnk)
 
@@ -93,7 +142,7 @@ def create_desktop_shortcut() -> tuple[bool, Path, str]:
         return (
             False,
             local_lnk,
-            f"已在项目目录生成快捷方式（写入桌面受限：{exc}）：{local_lnk}",
+            f"已在应用目录生成快捷方式（写入桌面受限：{exc}）：{local_lnk}",
         )
 
 

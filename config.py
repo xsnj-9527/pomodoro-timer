@@ -1,6 +1,33 @@
 """全局配置与主题常量模块。"""
 
+import os
 from pathlib import Path
+import sys
+
+
+def _is_dir_writable(directory: Path) -> bool:
+    """检测目标目录是否可写，避免打包后写入受保护目录失败。"""
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / ".write_probe.tmp"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+# 区分 PyInstaller 冻结环境与源码环境的资源/数据目录
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    _exe_dir = Path(sys.executable).resolve().parent
+    if _is_dir_writable(_exe_dir):
+        APP_HOME_DIR = _exe_dir
+    else:
+        APP_HOME_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "PomodoroTimer"
+else:
+    RESOURCE_DIR = Path(__file__).resolve().parent
+    APP_HOME_DIR = RESOURCE_DIR
 
 # 应用基本信息
 APP_NAME = "番茄钟"
@@ -22,13 +49,14 @@ MIN_INTERVAL_COUNT = 1
 MAX_INTERVAL_COUNT = 20
 
 # 本地数据与资源路径
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+BASE_DIR = APP_HOME_DIR
+DATA_DIR = APP_HOME_DIR / "data"
 HISTORY_FILE = DATA_DIR / "task_history.json"
-ASSETS_DIR = BASE_DIR / "assets"
+SOUNDS_DIR = DATA_DIR / "sounds"
+
+ASSETS_DIR = RESOURCE_DIR / "assets"
 ICON_ICO_PATH = ASSETS_DIR / "pomodoro.ico"
 ICON_PNG_PATH = ASSETS_DIR / "pomodoro.png"
-SOUNDS_DIR = DATA_DIR / "sounds"
 
 # 字体配置（倒计时数字使用等宽字体避免跳动）
 FONT_FAMILY = "Microsoft YaHei UI"

@@ -9,6 +9,7 @@ from unittest.mock import patch
 import wave
 
 from icon_helper import apply_window_icon, ensure_app_icons, get_tray_image, set_windows_app_id
+from installer import perform_install
 from notifier import Notifier
 from storage import TaskStorage
 from timer_engine import PomodoroEngine, TimerMode, TimerState
@@ -237,6 +238,22 @@ class TestNotifierAndUI(unittest.TestCase):
 
             app.after(180, _exercise_ui)
             app.mainloop()
+
+    def test_installer_perform_install_in_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            fake_payload = tmp_root / "番茄钟.exe"
+            fake_payload.write_bytes(b"MZ-fake-exe")
+            install_dir = tmp_root / "installed"
+
+            result = perform_install(
+                install_dir=install_dir,
+                create_desktop=False,
+                create_start_menu=False,
+                payload_exe=fake_payload,
+            )
+            self.assertTrue(result["installed_exe"].exists())
+            self.assertTrue(result["uninstall_script"].exists())
 
 
 if __name__ == "__main__":
